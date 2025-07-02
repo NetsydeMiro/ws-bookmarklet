@@ -1,12 +1,17 @@
 {
   "compilerOptions": {
-    "target": "ES6",
-    "module": "nodenext",
+    "target": "es2022",
+    "module": "none",              
+    "moduleResolution": "classic", 
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true, 
-    "moduleResolution": "nodenext"
+
+    "types": [
+      "node"
+    ], 
+    "skipLibCheck": true
   },
   "include": ["src"]
 }

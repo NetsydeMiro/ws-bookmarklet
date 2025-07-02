@@ -8,6 +8,7 @@
     "wrap": "node tools/wrap-bookmarklet.js"
   },
   "devDependencies": {
+    "@types/node": "20.10",
     "typescript": "^5.0.0"
   }
 }
