@@ -5,10 +5,9 @@
   "main": "dist/bookmarklet.js",
   "scripts": {
     "build": "tsc",
-    "wrap": "ts-node tools/wrap-bookmarklet.ts"
+    "wrap": "node tools/wrap-bookmarklet.js"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "ts-node": "^10.0.0"
+    "typescript": "^5.0.0"
   }
 }
