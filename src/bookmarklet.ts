@@ -28,19 +28,24 @@ function downloadCsv(data: string, filename: string) {
 }
 
 function extractTransactions(): Tx[] {
-  const rows = Array.from(document.querySelectorAll('[data-qa="activity-row"]'))
-  if (!rows.length) {
-    alert('No transactions found. Scroll to load more before running.')
-    return []
-  }
+  const buttons = Array.from(document.querySelectorAll('button[aria-expanded="true"]'))
 
-  return rows.map(row => {
-    const date = row.querySelector('[data-qa="activity-date"]')?.textContent?.trim() || ''
-    const description = row.querySelector('[data-qa="activity-description"]')?.textContent?.trim() || ''
-    const amount = row.querySelector('[data-qa="activity-amount"]')?.textContent?.trim() || ''
+  return buttons.map(button => {
+    // Description
+    const description = button.querySelector('p.bebPVD')?.textContent?.trim() || ''
+
+    // Amount
+    const amount = button.querySelector('p.jYlqYr')?.textContent?.trim() || ''
+
+    // Date – from sibling region
+    const regionId = button.getAttribute('aria-controls')
+    const region = regionId ? document.getElementById(regionId) : null
+    const date = region?.querySelector('p.bpEUME')?.textContent?.trim() || ''
+
     return { date, description, amount }
   })
 }
+
 
 function runExport() {
   const txs = extractTransactions()
