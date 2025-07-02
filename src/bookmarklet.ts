@@ -19,7 +19,8 @@ function jsonToCsv(items: Tx[]): string {
 }
 
 function downloadCsv(data: string, filename: string): void {
-  const blob = new Blob([data], { type: 'text/csv' })
+  const BOM = '\uFEFF'
+  const blob = new Blob([BOM + data], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
