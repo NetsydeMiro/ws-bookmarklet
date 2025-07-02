@@ -1,0 +1,14 @@
+{
+  "name": "ws-bookmarklet",
+  "version": "1.0.0",
+  "description": "Wealthsimple transaction exporter bookmarklet",
+  "main": "dist/bookmarklet.js",
+  "scripts": {
+    "build": "tsc",
+    "wrap": "ts-node tools/wrap-bookmarklet.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "ts-node": "^10.0.0"
+  }
+}
