@@ -13,7 +13,14 @@ function jsonToCsv(items: Tx[]): string {
   const replacer = (_key: string, value: any) => value ?? ''
   const csv = [
     header.join(','),
-    ...items.map(row => header.map(field => JSON.stringify((row as any)[field], replacer)).join(',')),
+    ...items.map(row =>
+      header
+        .map(field =>
+          JSON.stringify((row as any)[field], replacer)
+            .replace(/\u2212/g, '-') // ← convert Unicode minus to ASCII dash
+        )
+        .join(',')
+    ),
   ]
   return csv.join('\r\n')
 }
