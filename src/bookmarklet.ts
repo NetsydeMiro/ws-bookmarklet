@@ -5,6 +5,8 @@ interface Tx {
   from: string
   to: string
   status: string
+  type?: string
+  message?: string
 }
 
 function jsonToCsv(items: Tx[]): string {
@@ -16,8 +18,7 @@ function jsonToCsv(items: Tx[]): string {
     ...items.map(row =>
       header
         .map(field =>
-          JSON.stringify((row as any)[field], replacer)
-            .replace(/\u2212/g, '-') // ← convert Unicode minus to ASCII dash
+          JSON.stringify((row as any)[field], replacer).replace(/\u2212/g, '-')
         )
         .join(',')
     ),
@@ -39,11 +40,14 @@ function downloadCsv(data: string, filename: string): void {
 
 function getPanelField(region: HTMLElement | null, labelText: string): string {
   if (!region) return ''
-  const labels = Array.from(region.querySelectorAll('p.eRvzab'))
-  for (const label of labels) {
-    if (label.textContent?.trim() === labelText) {
-      const valP = label.nextElementSibling?.querySelector('p.bpEUME')
-      return valP?.textContent?.trim() || ''
+  // Each field is inside a child div
+  const fieldDivs = Array.from(region.querySelectorAll('div.sc-9b4b78e7-0.ecvbWZ'))
+  for (const div of fieldDivs) {
+    const ps = Array.from(div.querySelectorAll('p'))
+    if (ps.length >= 2) {
+      const label = ps[0].textContent?.trim() || ''
+      const value = ps[1].textContent?.trim() || ''
+      if (label === labelText) return value
     }
   }
   return ''
@@ -53,18 +57,33 @@ function extractTransactions(): Tx[] {
   const buttons = Array.from(document.querySelectorAll('button[aria-expanded="true"]'))
 
   return buttons.map(button => {
-    const description = (button.querySelector('p.bebPVD') as HTMLElement)?.textContent?.trim() || ''
-    const amount = (button.querySelector('p.jYlqYr') as HTMLElement)?.textContent?.trim() || ''
     const regionId = button.getAttribute('aria-controls')
     const region = regionId ? document.getElementById(regionId) : null
-    const date = getPanelField(region, 'Date')
-    const from = getPanelField(region, 'From')
-    const to = getPanelField(region, 'To')
-    const status = getPanelField(region, 'Status')
+
+    if (!region) return { date: '', description: '', amount: '', from: '', to: '', status: '' }
+
+    const getPanelField = (labelText: string): string => {
+      const fields = Array.from(region.querySelectorAll('div.ecvbWZ'))
+      for (const field of fields) {
+        const label = field.querySelector('p')?.textContent?.trim()
+        if (label === labelText) {
+          return field.querySelector('p.kgXkQa')?.textContent?.trim().replace(/\u2212/g, '-') || ''
+        }
+      }
+      return ''
+    }
+
+    const description = (button.querySelector('p[data-fs-privacy-rule="unmask"]') as HTMLElement)?.textContent?.trim() || ''
+    const amount = getPanelField('Amount')
+    const date = getPanelField('Date')
+    const from = getPanelField('From') || getPanelField('Account')
+    const to = getPanelField('To')
+    const status = getPanelField('Status')
 
     return { date, description, amount, from, to, status }
   })
 }
+
 
 function expandAll(): void {
   const buttons = Array.from(document.querySelectorAll('button[aria-expanded="false"]')) as HTMLButtonElement[]
@@ -81,5 +100,6 @@ function runExport(): void {
   downloadCsv(csv, 'wealthsimple-transactions.csv')
 }
 
+// Expand all accordions first, then run export after a short delay
 expandAll()
 setTimeout(runExport, 1000)
