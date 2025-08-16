@@ -40,16 +40,18 @@ function downloadCsv(data: string, filename: string): void {
 
 function getPanelField(region: HTMLElement | null, labelText: string): string {
   if (!region) return ''
-  // Each field is inside a child div
-  const fieldDivs = Array.from(region.querySelectorAll('div.sc-9b4b78e7-0.ecvbWZ'))
+
+  // Look for all direct child divs containing labels + values
+  const fieldDivs = Array.from(region.querySelectorAll('div'))
   for (const div of fieldDivs) {
     const ps = Array.from(div.querySelectorAll('p'))
     if (ps.length >= 2) {
       const label = ps[0].textContent?.trim() || ''
       const value = ps[1].textContent?.trim() || ''
-      if (label === labelText) return value
+      if (label === labelText) return value.replace(/\u2212/g, '-') // Unicode minus → dash
     }
   }
+
   return ''
 }
 
@@ -59,31 +61,23 @@ function extractTransactions(): Tx[] {
   return buttons.map(button => {
     const regionId = button.getAttribute('aria-controls')
     const region = regionId ? document.getElementById(regionId) : null
-
     if (!region) return { date: '', description: '', amount: '', from: '', to: '', status: '' }
 
-    const getPanelField = (labelText: string): string => {
-      const fields = Array.from(region.querySelectorAll('div.ecvbWZ'))
-      for (const field of fields) {
-        const label = field.querySelector('p')?.textContent?.trim()
-        if (label === labelText) {
-          return field.querySelector('p.kgXkQa')?.textContent?.trim().replace(/\u2212/g, '-') || ''
-        }
-      }
-      return ''
-    }
-
+    // Description: first <p> inside button with data-fs-privacy-rule="unmask"
     const description = (button.querySelector('p[data-fs-privacy-rule="unmask"]') as HTMLElement)?.textContent?.trim() || ''
-    const amount = getPanelField('Amount')
-    const date = getPanelField('Date')
-    const from = getPanelField('From') || getPanelField('Account')
-    const to = getPanelField('To')
-    const status = getPanelField('Status')
 
-    return { date, description, amount, from, to, status }
+    // Fields from the panel region
+    const amount = getPanelField(region, 'Amount')
+    const date = getPanelField(region, 'Date')
+    const from = getPanelField(region, 'From') || getPanelField(region, 'Account')
+    const to = getPanelField(region, 'To')
+    const status = getPanelField(region, 'Status')
+    const type = getPanelField(region, 'Type') // optional
+    const messageLink = region.querySelector('a')?.textContent?.trim() || '' // optional message
+
+    return { date, description, amount, from, to, status, type, message: messageLink }
   })
 }
-
 
 function expandAll(): void {
   const buttons = Array.from(document.querySelectorAll('button[aria-expanded="false"]')) as HTMLButtonElement[]
