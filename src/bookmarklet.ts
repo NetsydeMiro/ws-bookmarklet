@@ -58,25 +58,27 @@ function getPanelField(region: HTMLElement | null, labelText: string): string {
 function extractTransactions(): Tx[] {
   const buttons = Array.from(document.querySelectorAll('button[aria-expanded="true"]'))
 
-  return buttons.map(button => {
-    const regionId = button.getAttribute('aria-controls')
-    const region = regionId ? document.getElementById(regionId) : null
-    if (!region) return { date: '', description: '', amount: '', from: '', to: '', status: '' }
+  return buttons
+    .map(button => {
+      const regionId = button.getAttribute('aria-controls')
+      const region = regionId ? document.getElementById(regionId) : null
+      if (!region) return null  // skip if no panel
 
-    // Description: first <p> inside button with data-fs-privacy-rule="unmask"
-    const description = (button.querySelector('p[data-fs-privacy-rule="unmask"]') as HTMLElement)?.textContent?.trim() || ''
+      const description = (button.querySelector('p[data-fs-privacy-rule="unmask"]') as HTMLElement)?.textContent?.trim() || ''
+      const amount = getPanelField(region, 'Amount')
+      const date = getPanelField(region, 'Date')
+      const from = getPanelField(region, 'From') || getPanelField(region, 'Account')
+      const to = getPanelField(region, 'To')
+      const status = getPanelField(region, 'Status')
+      const type = getPanelField(region, 'Type')
+      const messageLink = region.querySelector('a')?.textContent?.trim() || ''
 
-    // Fields from the panel region
-    const amount = getPanelField(region, 'Amount')
-    const date = getPanelField(region, 'Date')
-    const from = getPanelField(region, 'From') || getPanelField(region, 'Account')
-    const to = getPanelField(region, 'To')
-    const status = getPanelField(region, 'Status')
-    const type = getPanelField(region, 'Type') // optional
-    const messageLink = region.querySelector('a')?.textContent?.trim() || '' // optional message
+      // Return null if all key fields are empty (to filter out blank rows)
+      if (!description && !amount && !date) return null
 
-    return { date, description, amount, from, to, status, type, message: messageLink }
-  })
+      return { date, description, amount, from, to, status, type, message: messageLink } as Tx
+    })
+    .filter((tx): tx is Tx => tx !== null)  // remove nulls
 }
 
 function expandAll(): void {
