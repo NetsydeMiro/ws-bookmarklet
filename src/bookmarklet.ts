@@ -93,7 +93,13 @@ function runExport(): void {
     return
   }
   const csv = jsonToCsv(txs)
-  downloadCsv(csv, 'wealthsimple-transactions.csv')
+
+  // Format date and time for filename: YYYY-MM-DD_HH-MM-SS
+  const now = new Date()
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`
+
+  downloadCsv(csv, `wealthsimple-transactions_${timestamp}.csv`)
 }
 
 // Expand all accordions first, then run export after a short delay
