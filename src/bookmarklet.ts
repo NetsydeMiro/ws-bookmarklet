@@ -41,22 +41,44 @@ function downloadCsv(data: string, filename: string): void {
 function getPanelField(region: HTMLElement | null, labelText: string): string {
   if (!region) return ''
 
-  // Look for all direct child divs containing labels + values
-  const fieldDivs = Array.from(region.querySelectorAll('div'))
-  for (const div of fieldDivs) {
-    const ps = Array.from(div.querySelectorAll('p'))
-    if (ps.length >= 2) {
-      const label = ps[0].textContent?.trim() || ''
-      const value = ps[1].textContent?.trim() || ''
-      if (label === labelText) return value.replace(/\u2212/g, '-') // Unicode minus → dash
+  const normalize = (text: string): string => text.replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim()
+
+  // New and old layouts both render a distinct label node; find the row by label text.
+  const nodes = Array.from(region.querySelectorAll('span, p')) as HTMLElement[]
+  for (const node of nodes) {
+    const label = normalize(node.textContent || '')
+    if (label !== labelText) continue
+
+    // The label is often inside a nested label-only div; walk up until we hit
+    // the transaction detail row that also contains the masked value container.
+    let row: HTMLElement | null = node.parentElement
+    while (row && row !== region && !row.querySelector('[data-fs-privacy-rule="mask"]')) {
+      row = row.parentElement
     }
+
+    if (!row || row === region) continue
+
+    // Prefer common value nodes first, then fall back to any non-label text in the row.
+    const preferredValues = Array.from(
+      row.querySelectorAll('[data-fs-privacy-rule="mask"] span, [data-fs-privacy-rule="mask"] p, p')
+    ) as HTMLElement[]
+
+    const fromPreferred = preferredValues
+      .map(el => normalize(el.textContent || ''))
+      .find(text => text && text !== labelText)
+
+    if (fromPreferred) return fromPreferred.replace(/\u2212/g, '-')
+
+    const fallback = normalize((row.textContent || '').replace(labelText, ''))
+
+    if (fallback) return fallback.replace(/\u2212/g, '-')
   }
 
   return ''
 }
 
 function extractTransactions(): Tx[] {
-  const buttons = Array.from(document.querySelectorAll('button[aria-expanded="true"]'))
+  const buttons = Array.from(document.querySelectorAll('button[aria-expanded="true"][aria-controls]'))
 
   return buttons
     .map(button => {
@@ -64,19 +86,19 @@ function extractTransactions(): Tx[] {
       const region = regionId ? document.getElementById(regionId) : null
       if (!region) return null  // skip if no panel
 
-      const description = (button.querySelector('p[data-fs-privacy-rule="unmask"]') as HTMLElement)?.textContent?.trim() || ''
+      const description = (button.querySelector('[data-fs-privacy-rule="unmask"]') as HTMLElement)?.textContent?.trim() || ''
       const amount = getPanelField(region, 'Amount') || getPanelField(region, 'Total')
       const date = getPanelField(region, 'Date')
       const from = getPanelField(region, 'From') || getPanelField(region, 'Account')
       const to = getPanelField(region, 'To')
       const status = getPanelField(region, 'Status')
       const type = getPanelField(region, 'Type')
-      const messageLink = region.querySelector('a')?.textContent?.trim() || ''
+      const message = getPanelField(region, 'Message') || region.querySelector('a')?.textContent?.trim() || ''
 
       // Return null if all key fields are empty (to filter out blank rows)
       if (!description && !amount && !date) return null
 
-      return { date, description, amount, from, to, status, type, message: messageLink } as Tx
+      return { date, description, amount, from, to, status, type, message } as Tx
     })
     .filter((tx): tx is Tx => tx !== null)  // remove nulls
 }
