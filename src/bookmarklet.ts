@@ -77,14 +77,21 @@ function getPanelField(region: HTMLElement | null, labelText: string): string {
   return ''
 }
 
+function isPending(button: HTMLElement): boolean {
+  const spans = Array.from(button.querySelectorAll('span')) as HTMLElement[]
+  return spans.some(el => (el.textContent || '').trim() === 'Pending')
+}
+
 function extractTransactions(): Tx[] {
-  const buttons = Array.from(document.querySelectorAll('button[aria-expanded="true"][aria-controls]'))
+  const buttons = Array.from(document.querySelectorAll('button[aria-expanded="true"][aria-controls]')) as HTMLElement[]
 
   return buttons
     .map(button => {
       const regionId = button.getAttribute('aria-controls')
       const region = regionId ? document.getElementById(regionId) : null
       if (!region) return null  // skip if no panel
+
+      if (isPending(button)) return null  // skip pending/unsettled transactions
 
       const description = (button.querySelector('[data-fs-privacy-rule="unmask"]') as HTMLElement)?.textContent?.trim() || ''
       const amount = getPanelField(region, 'Amount') || getPanelField(region, 'Total')

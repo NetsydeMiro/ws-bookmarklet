@@ -46,6 +46,8 @@ The exported CSV file includes the following columns:
 
 Files are named with a timestamp: `wealthsimple-transactions_YYYY-MM-DD_HH-MM-SS.csv`
 
+Pending/unsettled transactions (marked with a "Pending" badge on Wealthsimple) are excluded from the export, so totals reflect posted/settled activity only.
+
 ## Development
 
 ### Project Structure
