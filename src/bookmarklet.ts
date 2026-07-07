@@ -88,7 +88,7 @@ function extractTransactions(): Tx[] {
 
       const description = (button.querySelector('[data-fs-privacy-rule="unmask"]') as HTMLElement)?.textContent?.trim() || ''
       const amount = getPanelField(region, 'Amount') || getPanelField(region, 'Total')
-      const date = getPanelField(region, 'Date')
+      const date = getPanelField(region, 'Date') || getPanelField(region, 'Transaction date')
       const from = getPanelField(region, 'From') || getPanelField(region, 'Account')
       const to = getPanelField(region, 'To')
       const status = getPanelField(region, 'Status')
