@@ -28,9 +28,9 @@ This bookmarklet automatically:
 ## Usage
 
 1. Navigate to your Wealthsimple transactions page
-2. Make sure all transactions you want to export are visible on the page
+2. Scroll down (or click "View all") until every transaction you want to export has been loaded onto the page — the bookmarklet expands and reads whatever is already in the page, but won't load additional pages for you
 3. Click your bookmarklet
-4. The script will automatically expand all transaction details and download a CSV file
+4. The script will automatically expand all transaction details and download a CSV file. On a page with a lot of transactions, it waits for every accordion to finish expanding before downloading, so there may be a short delay
 
 ## Output
 

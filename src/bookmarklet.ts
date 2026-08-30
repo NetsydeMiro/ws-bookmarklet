@@ -38,51 +38,53 @@ function downloadCsv(data: string, filename: string): void {
   document.body.removeChild(a)
 }
 
+function normalize(text: string): string {
+  return text.replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 function getPanelField(region: HTMLElement | null, labelText: string): string {
   if (!region) return ''
 
-  const normalize = (text: string): string => text.replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim()
-
-  // New and old layouts both render a distinct label node; find the row by label text.
+  // Each field is rendered as a <dt>label</dt><dd>value</dd> pair, so once we find
+  // the label node we can go straight to its dt's next sibling dd for the value \u2014
+  // no need to guess how far up the tree the field's own wrapper sits.
   const nodes = Array.from(region.querySelectorAll('span, p')) as HTMLElement[]
   for (const node of nodes) {
     const label = normalize(node.textContent || '')
     if (label !== labelText) continue
 
-    // The label is often inside a nested label-only div; walk up until we hit
-    // the transaction detail row that also contains the masked value container.
-    let row: HTMLElement | null = node.parentElement
-    while (row && row !== region && !row.querySelector('[data-fs-privacy-rule="mask"]')) {
-      row = row.parentElement
-    }
+    const dt = node.closest('dt')
+    const dd = dt?.nextElementSibling as HTMLElement | null
+    if (!dd || dd.tagName !== 'DD') continue
 
-    if (!row || row === region) continue
-
-    // A row's value can be split across multiple masked elements with no whitespace
-    // between them in the DOM (e.g. date + time, or name + email) \u2014 join each masked
-    // element's own text separately so raw textContent concatenation doesn't run them together.
-    const maskedEls = Array.from(row.querySelectorAll('[data-fs-privacy-rule="mask"]')) as HTMLElement[]
-    const maskedTexts = maskedEls
-      .map(el => normalize(el.textContent || ''))
-      .filter(text => text && text !== labelText)
+    // A value can be split across multiple masked elements with no whitespace
+    // between them in the DOM (e.g. date + time) \u2014 join each masked element's
+    // own text separately so raw textContent concatenation doesn't run them together.
+    const maskedEls = Array.from(dd.querySelectorAll('[data-fs-privacy-rule="mask"]')) as HTMLElement[]
+    const maskedTexts = maskedEls.map(el => normalize(el.textContent || '')).filter(Boolean)
 
     if (maskedTexts.length > 0) return maskedTexts.join(' ').replace(/\u2212/g, '-')
 
-    // Fall back to any non-label text in the row (older/unmasked layout).
-    const preferredValues = Array.from(row.querySelectorAll('p')) as HTMLElement[]
-
-    const fromPreferred = preferredValues
-      .map(el => normalize(el.textContent || ''))
-      .find(text => text && text !== labelText)
-
-    if (fromPreferred) return fromPreferred.replace(/\u2212/g, '-')
-
-    const fallback = normalize((row.textContent || '').replace(labelText, ''))
-
+    const fallback = normalize(dd.textContent || '')
     if (fallback) return fallback.replace(/\u2212/g, '-')
   }
 
   return ''
+}
+
+function getDisputeMessage(region: HTMLElement): string {
+  // A panel can contain multiple links (e.g. a cheque has both "Download cheque
+  // image" and "Dispute this payment") — only the dispute-related one belongs here.
+  const links = Array.from(region.querySelectorAll('a')) as HTMLElement[]
+  const disputeLink = links.find(a => /dispute|recognize/i.test(a.textContent || ''))
+  return normalize(disputeLink?.textContent || '')
+}
+
+function getDescription(button: HTMLElement): string {
+  const icon = button.querySelector('span[aria-hidden="true"]')
+  const infoWrapper = icon?.nextElementSibling as HTMLElement | null
+  const nameSpan = infoWrapper?.firstElementChild as HTMLElement | null
+  return normalize(nameSpan?.textContent || '')
 }
 
 function isPending(button: HTMLElement): boolean {
@@ -101,14 +103,14 @@ function extractTransactions(): Tx[] {
 
       if (isPending(button)) return null  // skip pending/unsettled transactions
 
-      const description = (button.querySelector('[data-fs-privacy-rule="unmask"]') as HTMLElement)?.textContent?.trim() || ''
+      const description = getDescription(button)
       const amount = getPanelField(region, 'Amount') || getPanelField(region, 'Total')
       const date = getPanelField(region, 'Date') || getPanelField(region, 'Transaction date')
       const from = getPanelField(region, 'From') || getPanelField(region, 'Account')
-      const to = getPanelField(region, 'To')
+      const to = getPanelField(region, 'To') || getPanelField(region, 'Beneficiary')
       const status = getPanelField(region, 'Status')
       const type = getPanelField(region, 'Type')
-      const message = getPanelField(region, 'Message') || region.querySelector('a')?.textContent?.trim() || ''
+      const message = getPanelField(region, 'Message') || getDisputeMessage(region)
 
       // Return null if all key fields are empty (to filter out blank rows)
       if (!description && !amount && !date) return null
@@ -118,9 +120,35 @@ function extractTransactions(): Tx[] {
     .filter((tx): tx is Tx => tx !== null)  // remove nulls
 }
 
+// Transaction accordions are wrapped in a div that carries data-closed/data-open for their
+// collapsed/expanded state — unlike aria-controls (only added once a panel has actually
+// opened at least once, so it can't be used to find not-yet-expanded buttons), this
+// attribute is present from first render and reliably excludes unrelated collapsible
+// buttons elsewhere on the page (notifications, account menus, "download activities", support
+// chat) that also use plain aria-expanded="false" but aren't part of this wrapper pattern.
+const COLLAPSED_TRANSACTION_BUTTON_SELECTOR = '[data-closed] > button[aria-expanded="false"]'
+
 function expandAll(): void {
-  const buttons = Array.from(document.querySelectorAll('button[aria-expanded="false"]')) as HTMLButtonElement[]
+  const buttons = Array.from(document.querySelectorAll(COLLAPSED_TRANSACTION_BUTTON_SELECTOR)) as HTMLButtonElement[]
   buttons.forEach(btn => btn.click())
+}
+
+function waitForExpansion(done: () => void, settleDelayMs = 300, timeoutMs = 10000, pollIntervalMs = 200): void {
+  // A "more data" view can have 100+ accordions to expand at once, and each click's
+  // panel content renders asynchronously — polling until none are left collapsed (rather
+  // than guessing a fixed delay) avoids extracting mid-render. The settleDelayMs grace
+  // period after that gives the just-expanded panels' own content a moment to finish
+  // painting before we read them.
+  const deadline = Date.now() + timeoutMs
+  const poll = () => {
+    const stillCollapsed = document.querySelectorAll(COLLAPSED_TRANSACTION_BUTTON_SELECTOR).length
+    if (stillCollapsed === 0 || Date.now() > deadline) {
+      setTimeout(done, settleDelayMs)
+      return
+    }
+    setTimeout(poll, pollIntervalMs)
+  }
+  poll()
 }
 
 function runExport(): void {
@@ -139,6 +167,6 @@ function runExport(): void {
   downloadCsv(csv, `wealthsimple-transactions_${timestamp}.csv`)
 }
 
-// Expand all accordions first, then run export after a short delay
+// Expand all accordions first, then run export once they've all finished rendering
 expandAll()
-setTimeout(runExport, 1000)
+waitForExpansion(runExport)
