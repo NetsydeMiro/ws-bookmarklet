@@ -58,10 +58,18 @@ function getPanelField(region: HTMLElement | null, labelText: string): string {
 
     if (!row || row === region) continue
 
-    // Prefer common value nodes first, then fall back to any non-label text in the row.
-    const preferredValues = Array.from(
-      row.querySelectorAll('[data-fs-privacy-rule="mask"] span, [data-fs-privacy-rule="mask"] p, p')
-    ) as HTMLElement[]
+    // A row's value can be split across multiple masked elements with no whitespace
+    // between them in the DOM (e.g. date + time, or name + email) \u2014 join each masked
+    // element's own text separately so raw textContent concatenation doesn't run them together.
+    const maskedEls = Array.from(row.querySelectorAll('[data-fs-privacy-rule="mask"]')) as HTMLElement[]
+    const maskedTexts = maskedEls
+      .map(el => normalize(el.textContent || ''))
+      .filter(text => text && text !== labelText)
+
+    if (maskedTexts.length > 0) return maskedTexts.join(' ').replace(/\u2212/g, '-')
+
+    // Fall back to any non-label text in the row (older/unmasked layout).
+    const preferredValues = Array.from(row.querySelectorAll('p')) as HTMLElement[]
 
     const fromPreferred = preferredValues
       .map(el => normalize(el.textContent || ''))
