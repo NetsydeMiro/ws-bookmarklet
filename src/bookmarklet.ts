@@ -133,16 +133,33 @@ function expandAll(): void {
   buttons.forEach(btn => btn.click())
 }
 
-function waitForExpansion(done: () => void, settleDelayMs = 300, timeoutMs = 10000, pollIntervalMs = 200): void {
+// Even rows whose accordion is already expanded (aria-expanded="true") can have their detail
+// panel (dt/dd fields — Amount, Status, etc.) still loading asynchronously: the aria-expanded
+// flag flips the instant a row opens, well before its data has arrived. Counting only
+// still-collapsed buttons therefore isn't enough — with 50+ rows opening in a burst, most
+// panels haven't finished loading by the time a fixed settle delay runs out, which is why
+// extracted rows can come back with a description but no amount.
+function countLoadingTransactionPanels(): number {
+  const buttons = Array.from(document.querySelectorAll('button[aria-expanded="true"][aria-controls]')) as HTMLElement[]
+  return buttons.filter(button => {
+    if (!getDescription(button)) return false  // not a transaction row (e.g. "Quick filters")
+    const regionId = button.getAttribute('aria-controls')
+    const region = regionId ? document.getElementById(regionId) : null
+    return !region || !region.querySelector('dt')  // panel present but detail fields not painted yet
+  }).length
+}
+
+function waitForExpansion(done: () => void, settleDelayMs = 300, timeoutMs = 15000, pollIntervalMs = 200): void {
   // A "more data" view can have 100+ accordions to expand at once, and each click's
-  // panel content renders asynchronously — polling until none are left collapsed (rather
-  // than guessing a fixed delay) avoids extracting mid-render. The settleDelayMs grace
-  // period after that gives the just-expanded panels' own content a moment to finish
-  // painting before we read them.
+  // panel content renders asynchronously — polling until none are left collapsed or still
+  // loading their detail fields (rather than guessing a fixed delay) avoids extracting
+  // mid-render. The settleDelayMs grace period after that gives the last panels' content a
+  // moment to finish painting before we read them.
   const deadline = Date.now() + timeoutMs
   const poll = () => {
     const stillCollapsed = document.querySelectorAll(COLLAPSED_TRANSACTION_BUTTON_SELECTOR).length
-    if (stillCollapsed === 0 || Date.now() > deadline) {
+    const stillLoading = countLoadingTransactionPanels()
+    if ((stillCollapsed === 0 && stillLoading === 0) || Date.now() > deadline) {
       setTimeout(done, settleDelayMs)
       return
     }
